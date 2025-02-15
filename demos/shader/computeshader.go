@@ -1,11 +1,10 @@
 package shader
 
 import (
-	"encoding/hex"
 	"fmt"
 	"os"
+	"slices"
 	"time"
-	"unsafe"
 
 	"github.com/g3n/engine/gls"
 	"github.com/g3n/engine/light"
@@ -16,7 +15,7 @@ import (
 )
 
 func init() {
-	app.DemoMap["shader.computeshader"] = &ComputeDemo{filepath: "shaders/compute2.glsl", workGroups: gls.NewNumWorkGroups(64, 1, 1)}
+	app.DemoMap["shader.computeshader"] = &ComputeDemo{filepath: "shaders/compute2.glsl", workGroups: gls.NewNumWorkGroups(16, 1, 1)}
 }
 
 func loadFile(filepath string) string {
@@ -28,9 +27,10 @@ func loadFile(filepath string) string {
 }
 
 type ComputeDemo struct {
-	a          *app.App
-	filepath   string
-	workGroups *gls.NumWorkGroups
+	a            *app.App
+	filepath     string
+	workGroups   *gls.NumWorkGroups
+	computeSpecs *renderer.ComputeSpecs
 }
 
 // Start is called once at the start of the demo.
@@ -46,41 +46,37 @@ func (t *ComputeDemo) Start(a *app.App) {
 	a.Scene().Add(axes)
 
 	// Create custom shader
-	a.Coman().AddShader("computeShader", loadFile(a.DirData()+"/"+t.filepath))
+	a.Renderer().Coman().AddShader("computeShader", loadFile(a.DirData()+"/"+t.filepath))
 
-	a.Coman().AddProgram("ComputeProgram", "computeShader")
+	a.Renderer().Coman().AddProgram("ComputeProgram", "computeShader")
 
-	callback := func(ssbo *gls.SSBO, p unsafe.Pointer, deltaTime time.Duration) {
-		fmt.Print("Raw data: ")
-		for i := 0; i < ssbo.Length*4; i++ {
-			var element byte = *(*byte)(unsafe.Pointer(uintptr(p) + uintptr(i)))
-			fmt.Print(hex.EncodeToString([]byte{element}))
+	callback := func(b *gls.BufferRAM, deltaTime time.Duration) {
+		vec := b.GetVector4(0)
+		fmt.Printf("0 %f %f %f %f\n", vec.X, vec.Y, vec.Z, vec.W)
+		vec.X = 1.0
+		err := b.SetVector4(0, vec)
+		if err != nil {
+			panic(err)
 		}
-		fmt.Print("\n")
-		for i := 0; i < ssbo.Length; i++ {
-			// are writing go or are we writing c???
-			// from the unsafe docs:
-			// > e := unsafe.Pointer(&p[i] + i * sizeof(p))
-			var element float32 = *(*float32)(unsafe.Pointer(uintptr(p) + uintptr(i)*4))
-			fmt.Printf("Value at %d: %f\n", i, element)
-		}
-		fmt.Print("\n")
 	}
-	ssbo := gls.NewSSBO(a.Coman().GetGLS(), 0, gls.SSBO_READ_ONLY, callback, 0, 4)
+	ssbo := gls.NewSSBO(a.Renderer().Coman().GetGLS(), 0, gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callback, t.workGroups.X*16)
+	ssbo.SetInitialData(slices.Repeat([]byte{0x11}, int(t.workGroups.X*16)))
 	bufferObjects := gls.NewBufferObjects()
 	bufferObjects.Set(ssbo)
 
-	computeSpecs := renderer.NewComputeSpecs("ComputeProgram", "4_3", *gls.NewShaderDefines(), *bufferObjects)
-	_, err := a.Coman().SetProgram(computeSpecs)
+	t.computeSpecs = renderer.NewComputeSpecs("ComputeProgram", "4_3", *gls.NewShaderDefines(), *bufferObjects)
+	_, err := a.Renderer().Coman().SetProgram(t.computeSpecs)
 	if err != nil {
 		fmt.Printf("Failed to set the shader program: %s\n", err)
 		return
 	}
-	a.Coman().Compute(*t.workGroups, time.Duration(1))
+	a.Renderer().Coman().Compute(*t.workGroups, time.Duration(1))
 }
 
 // Update is called every frame.
 func (t *ComputeDemo) Update(a *app.App, deltaTime time.Duration) {
+	a.Renderer().Coman().SetProgram(t.computeSpecs)
+	a.Renderer().Coman().Compute(*t.workGroups, time.Duration(1))
 }
 
 // Cleanup is called once at the end of the demo.
