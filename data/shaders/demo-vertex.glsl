@@ -1,0 +1,33 @@
+#include <attributes>
+#include <material>
+
+// Model uniforms
+uniform mat4 ModelViewMatrix;
+uniform mat3 NormalMatrix;
+uniform mat4 MVP;
+
+// Output variables for Fragment shader
+out vec4 Position;
+out vec3 Normal;
+out vec3 CamDir;
+out vec2 FragTexcoord;
+out vec2 VPosition;
+
+void main() {
+
+    // Transform this vertex position to camera coordinates.
+    Position = ModelViewMatrix * vec4(VertexPosition, 1.0);
+    VPosition = VertexPosition.xy;
+
+    // Transform this vertex normal to camera coordinates.
+    Normal = normalize(NormalMatrix * VertexNormal);
+
+    // Calculate the direction vector from the vertex to the camera
+    // The camera is at 0,0,0
+    CamDir = normalize(-Position.xyz);
+
+    vec2 texcoord = VertexTexcoord;
+    FragTexcoord = texcoord;
+
+    gl_Position = MVP * vec4(VertexPosition, 1.0);
+}
