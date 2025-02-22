@@ -103,7 +103,7 @@ func (t *ParticleDemo) Start(a *app.App) {
 	t.mat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8})
 	t.mat.SetParticleSize(10)
 	// Create geometry that takes its data from the created buffer
-	t.particleGeometry = geometry.NewParticles(t.numParticles, positionsBO, math32.NewVector3(5, 5, 5))
+	t.particleGeometry = geometry.NewParticles(t.numParticles, math32.NewVector3(5, 5, 5))
 	t.particleGraphics = graphic.NewParticleSim(t.particleGeometry, t.mat)
 	t.particleGraphics.SetPosition(0, 1, 0)
 	a.Scene().Add(t.particleGraphics)
