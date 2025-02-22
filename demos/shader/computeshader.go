@@ -3,19 +3,23 @@ package shader
 import (
 	"fmt"
 	"os"
-	"slices"
 	"time"
+	"unsafe"
 
+	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
+	"github.com/g3n/engine/graphic"
 	"github.com/g3n/engine/light"
+	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
+	"github.com/g3n/engine/math64"
 	"github.com/g3n/engine/renderer"
 	"github.com/g3n/engine/util/helper"
 	"github.com/g3n/g3nd/app"
 )
 
 func init() {
-	app.DemoMap["shader.computeshader"] = &ComputeDemo{filepath: "shaders/compute2.glsl", workGroups: gls.NewNumWorkGroups(16, 1, 1)}
+	app.DemoMap["shader.computeshader"] = &ComputeDemo{computefile: "shaders/demo-compute.glsl", vertexfile: "shaders/demo-vertex.glsl", fragmentfile: "shaders/demo-fragment.glsl", workGroups: gls.NewNumWorkGroups(8, 8, 8)}
 }
 
 func loadFile(filepath string) string {
@@ -28,15 +32,30 @@ func loadFile(filepath string) string {
 
 type ComputeDemo struct {
 	a            *app.App
-	filepath     string
+	computefile  string
+	vertexfile   string
+	fragmentfile string
+	plane1       *graphic.Mesh
 	workGroups   *gls.NumWorkGroups
-	computeSpecs *renderer.ComputeSpecs
+	computeSpecs *gls.ComputeSpecs
+	shaderSpecs  renderer.ShaderSpecs
+}
+
+type DataBuffer3 struct {
+	loc   math32.Vector3
+	i     uint32
+	speed float32
+	_     [2]int32
+	data  [5]math64.Vector4
+}
+
+func (d *DataBuffer3) ToString() string {
+	//return fmt.Sprintf("i %d, loc %p, speed %f, data %s", d.i, d.loc, d.speed, d.data)
+	return fmt.Sprintf("%+v", *d)
 }
 
 // Start is called once at the start of the demo.
 func (t *ComputeDemo) Start(a *app.App) {
-	fmt.Printf("Size: %d\n", gls.SizeMat4x3Std430)
-
 	// Adds directional front light
 	dir1 := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 0.6)
 	dir1.SetPosition(0, 0, 100)
@@ -47,90 +66,86 @@ func (t *ComputeDemo) Start(a *app.App) {
 	a.Scene().Add(axes)
 
 	// Create custom shader
-	a.Renderer().Coman().AddShader("computeShader", loadFile(a.DirData()+"/"+t.filepath))
+	a.Renderer().AddShader("vertex-shader", loadFile(a.DirData()+"/"+t.vertexfile))
+	a.Renderer().AddShader("fragment-shader", loadFile(a.DirData()+"/"+t.fragmentfile))
+	a.Renderer().Coman().AddShader("compute-shader", loadFile(a.DirData()+"/"+t.computefile))
 
-	a.Renderer().Coman().AddProgram("ComputeProgram", "computeShader")
+	a.Renderer().Coman().AddProgram("ComputeProgram", "compute-shader")
+	a.Renderer().AddProgram("FragProgram", "vertex-shader", "fragment-shader")
 
-	callback := func(b *gls.BufferRAM, deltaTime time.Duration) {
-		//for _, by := range b.AsBytes() {
-		//	fmt.Printf("%02x", by)
-		//}
-		vec, err := b.GetDvec4(0)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("0 %f %f %f %f\n", vec.X, vec.Y, vec.Z, vec.W)
-		vec.X = 1.0
-		err = b.SetDvec4(0, vec)
-		if err != nil {
-			panic(err)
-		}
-	}
-	callbackIntegers := func(b *gls.BufferRAM, deltaTime time.Duration) {
-		//for _, by := range b.AsBytes() {
-		//	fmt.Printf("%02x", by)
-		//}
-		i, err := b.GetInt(0)
-		if err != nil {
-			panic(err)
-		}
-		//fmt.Printf("\t0 %d\n", i)
-		i += 1
-		err = b.SetInt(0, i)
-		if err != nil {
-			panic(err)
-		}
-	}
-	callbackBools := func(b *gls.BufferRAM, deltaTime time.Duration) {
-		//for _, by := range b.AsBytes() {
-		//	fmt.Printf("%02x", by)
-		//}
-		i, err := b.GetBool(0)
-		if err != nil {
-			panic(err)
-		}
-		s := "true"
-		if !i {
-			s = "false"
-		}
-		fmt.Printf("\t0 %s\n", s)
-		err = b.SetBool(0, !i)
-		if err != nil {
-			panic(err)
-		}
-		for _, b_ := range b.AsBool() {
-			s := "1"
-			if !b_ {
-				s = "0"
+	var vectors [30]math32.Vector3
+	vec3length := len(vectors)
+	callback := func(b_ *gls.BufferRaw, deltaTime time.Duration) {
+		b := b_.Typed()
+		for i := 0; i < vec3length; i++ {
+			v, err := b.GetVec3(0)
+			if err != nil {
+				panic(err)
 			}
-			fmt.Printf("%s", s)
+			fmt.Printf("%dth Vector: %+v\n", i, v)
 		}
-		fmt.Println("")
 	}
 	bufferObjects := gls.NewBufferObjects()
-	bufferObjects.Set(
-		gls.NewSSBO(a.Renderer().Coman().GetGLS(), 0,
-			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callback, gls.SizeVec4Std430*16).SetInitialData(slices.Repeat([]byte{0x00}, int(gls.SizeVec4Std430*16))))
-	bufferObjects.Set(
-		gls.NewSSBO(a.Renderer().Coman().GetGLS(), 1,
-			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callbackIntegers, gls.SizeIntStd430*16).SetInitialData(slices.Repeat([]byte{0x00}, int(gls.SizeIntStd430*16))))
-	bufferObjects.Set(
-		gls.NewSSBO(a.Renderer().Coman().GetGLS(), 2,
-			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callbackBools, gls.SizeBoolStd430*16).SetInitialData(slices.Repeat([]byte{0x00}, int(gls.SizeBoolStd430*16))))
 
-	t.computeSpecs = renderer.NewComputeSpecs("ComputeProgram", "4_3", *gls.NewShaderDefines(), *bufferObjects)
+	ssbo := gls.NewSSBO(a.Renderer().Coman().GLS(), 0,
+		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callback,
+		uint32(unsafe.Sizeof(vectors)))
+	bufferObjects.Set(ssbo)
+
+	t.computeSpecs = gls.NewComputeSpecs("ComputeProgram", "4_3", *gls.NewShaderDefines(), bufferObjects)
 	_, err := a.Renderer().Coman().SetProgram(t.computeSpecs)
 	if err != nil {
 		fmt.Printf("Failed to set the shader program: %s\n", err)
 		return
 	}
-	a.Renderer().Coman().Compute(*t.workGroups, time.Duration(1))
+
+	t.shaderSpecs.Defines = *gls.NewShaderDefines()
+	t.shaderSpecs.Name = "FragProgram"
+	a.Renderer().SetProgram(&t.shaderSpecs)
+	_, err = a.Renderer().Coman().SetProgram(t.computeSpecs)
+	if err != nil {
+		fmt.Printf("Failed to set the shader program: %s\n", err)
+		return
+	}
+
+	geom1 := geometry.NewPlane(2, 2)
+	mat1 := NewComputeMaterial(&math32.Color{R: 0.0, G: 0.8, B: 1.0})
+	mat1.SetSide(material.SideDouble)
+	mat1.SetShininess(10)
+	mat1.SetSpecularColor(&math32.Color{R: 0, G: 0, B: 0})
+	t.plane1 = graphic.NewMesh(geom1, mat1)
+	t.plane1.SetPosition(0, 0, 0)
+	a.Scene().Add(t.plane1)
+	t.plane1.RotateY(-0.001)
+}
+
+type ComputeMaterial struct {
+	material.Standard // Embedded standard material
+	color             math32.Color
+	uniColor          gls.Uniform
+}
+
+func NewComputeMaterial(color *math32.Color) *ComputeMaterial {
+
+	m := new(ComputeMaterial)
+	m.Standard.Init("FragProgram", color)
+
+	m.uniColor.Init("Color")
+	m.color = *color
+	return m
+}
+
+func (m *ComputeMaterial) RenderSetup(gl *gls.GLS) {
+
+	m.Standard.RenderSetup(gl)
+	gl.Uniform3fv(m.uniColor.Location(gl), 1, &m.color.R)
 }
 
 // Update is called every frame.
 func (t *ComputeDemo) Update(a *app.App, deltaTime time.Duration) {
+	t.plane1.RotateY(-0.005)
 	a.Renderer().Coman().SetProgram(t.computeSpecs)
-	a.Renderer().Coman().Compute(*t.workGroups, time.Duration(1))
+	a.Renderer().Coman().Compute(*t.workGroups, deltaTime)
 }
 
 // Cleanup is called once at the end of the demo.
