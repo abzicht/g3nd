@@ -56,6 +56,7 @@ func (d *DataBuffer3) ToString() string {
 
 // Start is called once at the start of the demo.
 func (t *ComputeDemo) Start(a *app.App) {
+	gs := a.Renderer().Coman().GLS()
 	// Adds directional front light
 	dir1 := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 0.6)
 	dir1.SetPosition(0, 0, 100)
@@ -87,9 +88,8 @@ func (t *ComputeDemo) Start(a *app.App) {
 	}
 	bufferObjects := gls.NewBufferObjects()
 
-	ssbo := gls.NewSSBO(a.Renderer().Coman().GLS(), 0,
-		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callback,
-		uint32(unsafe.Sizeof(vectors)))
+	ssbo := gls.NewSSBO(gs, 0,
+		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callback, uint32(unsafe.Sizeof(vectors)))
 	bufferObjects.Set(ssbo)
 
 	t.computeSpecs = gls.NewComputeSpecs("ComputeProgram", "4_3", *gls.NewShaderDefines(), bufferObjects)
