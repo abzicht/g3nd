@@ -13,7 +13,6 @@ import (
 	"github.com/g3n/engine/light"
 	"github.com/g3n/engine/material"
 	"github.com/g3n/engine/math32"
-	"github.com/g3n/engine/util/helper"
 	"github.com/g3n/g3nd/app"
 )
 
@@ -22,7 +21,7 @@ func init() {
 		computeShaderFile: "shaders/particle_compute.glsl",
 		boundsMin:         math32.NewVector3(0, 0, 0),
 		boundsMax:         math32.NewVector3(2, 2, 2),
-		numParticles:      1e3,
+		numParticles:      1e5,
 	}
 }
 
@@ -39,7 +38,7 @@ type ParticleDemo struct {
 	workGroups        *gls.NumWorkGroups
 	particleGraphics  *graphic.ParticleSim
 	particleGeometry  *geometry.ParticleGeometry
-	mat               *material.ParticleMaterial
+	particleMat       *material.ParticleMaterial
 	computeSpecs      *gls.ComputeSpecs
 	computeShaderFile string
 	numParticles      uint32
@@ -57,15 +56,15 @@ func (t *ParticleDemo) Start(a *app.App) {
 	gs := a.Renderer().Coman().GLS()
 	// Adds directional front light
 	dir1 := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 1)
-	dir1.SetPosition(0, 0, 100)
+	dir1.SetPosition(0, 30, 100)
 	a.Scene().Add(dir1)
 
-	// Add axes helper
-	axes := helper.NewAxes(1)
-	a.Scene().Add(axes)
+	//// Add axes helper
+	//axes := helper.NewAxes(1)
+	//a.Scene().Add(axes)
 
 	a.Renderer().Coman().AddShader("particle_compute_demo", loadFile(a.DirData()+"/"+t.computeShaderFile))
-	a.Renderer().Coman().AddChunk("", loadFile(a.DirData()+"/"+t.computeShaderFile))
+	//a.Renderer().Coman().AddChunk("", loadFile(a.DirData()+"/"+t.computeShaderFile))
 	a.Renderer().Coman().AddProgram("ParticleDemoProg", "particle_compute_demo")
 	ssbos := gls.NewBufferObjects()
 	{
@@ -75,27 +74,25 @@ func (t *ParticleDemo) Start(a *app.App) {
 		t.workGroups.Y = 1
 		t.workGroups.Z = 1
 	}
-	{
-		var particles []math32.Vector3
-		for i := uint32(0); i < t.numParticles; i++ {
-			randVec := math32.NewVector3(rand.Float32(), rand.Float32(), rand.Float32())
-			randVec.MultiplyScalar(0.25).AddScalar(0.5)
-			var particle math32.Vector3
-			particle.Add(t.boundsMax)
-			particle.Sub(t.boundsMin)
-			particle.Multiply(randVec)
-			particle.Add(t.boundsMin)
-			particles = append(particles, particle)
-		}
-		positionsBO := gls.NewSSBO(gs, 0,
-			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil,
-			uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector3]())).SetInitialBuffer(gls.NewBufferRaw(
-			unsafe.Pointer(unsafe.SliceData(particles)), uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector3]())))
-		ssbos.Set(positionsBO)
+	var particles []math32.Vector3
+	for i := uint32(0); i < t.numParticles; i++ {
+		randVec := math32.NewVector3(rand.Float32(), rand.Float32(), rand.Float32())
+		randVec.MultiplyScalar(0.05).AddScalar(0.5)
+		var particle math32.Vector3
+		particle.Add(t.boundsMax)
+		particle.Sub(t.boundsMin)
+		particle.Multiply(randVec)
+		particle.Add(t.boundsMin)
+		particles = append(particles, particle)
 	}
+	positionsBO := gls.NewSSBO(gs, geometry.ParticlePositionBinding,
+		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil,
+		uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector3]())).SetInitialBuffer(gls.NewBufferRaw(
+		unsafe.Pointer(unsafe.SliceData(particles)), uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector3]())))
+	ssbos.Set(positionsBO)
 	{
 		// This is the color buffer
-		ssbos.Set(gls.NewSSBO(gs, 1,
+		ssbos.Set(gls.NewSSBO(gs, material.ParticleColorBinding,
 			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil,
 			uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector4]())))
 	}
@@ -121,17 +118,18 @@ func (t *ParticleDemo) Start(a *app.App) {
 		}
 	}
 
-	t.mat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8})
-	t.mat.SetParticleSize(0.8)
+	t.particleMat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8}, false)
+	t.particleMat.SetParticleSize(10)
 
 	// Create geometry that takes its data from the created buffer
-	t.particleGeometry = geometry.NewParticles(t.numParticles, t.boundsMax.Sub(t.boundsMin))
-	t.particleGeometry.SetParticleShape(geometry.NewDisk(1, 5))
+	t.particleGeometry = geometry.NewParticles(t.numParticles, positionsBO, t.boundsMax.Sub(t.boundsMin))
+	t.particleGeometry.SetParticleShape(geometry.NewCone(0.04, 0.09, 3, 3, true))
+	t.particleGeometry.SetParticleShape(geometry.NewSphere(0.01, 8, 8))
 
-	t.particleGraphics = graphic.NewParticleSim(t.particleGeometry, t.mat)
+	t.particleGraphics = graphic.NewParticleSim(t.particleGeometry, t.particleMat)
 	t.particleGraphics.SetPosition(t.boundsMin.X, t.boundsMin.Y, t.boundsMin.Z)
 	a.Scene().Add(t.particleGraphics)
-	if true {
+	if false {
 		geom2 := geometry.NewSphere(.5, 32, 16)
 		mat2 := material.NewStandard(&math32.Color{R: 1, G: 1, B: 1})
 		mat2.SetWireframe(false)
@@ -158,5 +156,5 @@ func (t *ParticleDemo) Update(a *app.App, deltaTime time.Duration) {
 
 // Cleanup is called once at the end of the demo.
 func (t *ParticleDemo) Cleanup(a *app.App) {
-	a.Renderer().Coman().DeletePrograms()
+	//a.Renderer().Coman().DeletePrograms()
 }
