@@ -85,17 +85,14 @@ func (t *ParticleDemo) Start(a *app.App) {
 		particle.Add(t.boundsMin)
 		particles = append(particles, particle)
 	}
+	bufferSize := t.numParticles * uint32(gls.SizeofT[math32.Vector3]())
 	positionsBO := gls.NewSSBO(gs, geometry.ParticlePositionBinding,
-		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil,
-		uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector3]())).SetInitialBuffer(gls.NewBufferRaw(
-		unsafe.Pointer(unsafe.SliceData(particles)), uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector3]())))
+		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, bufferSize).SetInitialBuffer(gls.NewBufferRaw(
+		unsafe.Pointer(unsafe.SliceData(particles)), bufferSize))
 	ssbos.Set(positionsBO)
-	{
-		// This is the color buffer
-		ssbos.Set(gls.NewSSBO(gs, material.ParticleColorBinding,
-			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil,
-			uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector4]())))
-	}
+	colorBO := gls.NewSSBO(gs, material.ParticleColorBinding, gls.BO_DYNAMIC_COPY,
+		gls.BO_READ_WRITE, nil, t.numParticles*uint32(gls.SizeofT[math32.Vector4]()))
+	ssbos.Set(colorBO)
 	{
 		var velocities []math32.Vector3
 		for i := uint32(0); i < t.numParticles; i++ {
@@ -104,10 +101,10 @@ func (t *ParticleDemo) Start(a *app.App) {
 			velocity.MultiplyScalar(0.01)
 			velocities = append(velocities, *velocity)
 		}
+		bufferSize = t.numParticles * uint32(gls.SizeofT[math32.Vector3]())
 		ssbos.Set(gls.NewSSBO(gs, 3,
-			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil,
-			uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector3]())).SetInitialBuffer(gls.NewBufferRaw(
-			unsafe.Pointer(unsafe.SliceData(velocities)), uint32(gls.TypeSize(t.numParticles)*gls.SizeofT[math32.Vector3]()))))
+			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, bufferSize).SetInitialBuffer(gls.NewBufferRaw(
+			unsafe.Pointer(unsafe.SliceData(velocities)), bufferSize)))
 	}
 	{
 		t.computeSpecs = gls.NewComputeSpecs("ParticleDemoProg", "4_3", *gls.NewShaderDefines(), ssbos)
@@ -118,12 +115,12 @@ func (t *ParticleDemo) Start(a *app.App) {
 		}
 	}
 
-	t.particleMat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8}, false)
-	t.particleMat.SetParticleSize(10)
+	t.particleMat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8}, nil)
+	t.particleMat.SetParticleSize(30)
 
 	// Create geometry that takes its data from the created buffer
 	t.particleGeometry = geometry.NewParticles(t.numParticles, positionsBO, t.boundsMax.Sub(t.boundsMin))
-	t.particleGeometry.SetParticleShape(geometry.NewCone(0.04, 0.09, 3, 3, true))
+	//t.particleGeometry.SetParticleShape(geometry.NewCone(0.04, 0.09, 3, 3, true))
 	t.particleGeometry.SetParticleShape(geometry.NewSphere(0.01, 8, 8))
 
 	t.particleGraphics = graphic.NewParticleSim(t.particleGeometry, t.particleMat)

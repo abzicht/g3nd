@@ -5,14 +5,14 @@
 
 layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, shared, binding = 0) buffer ParticlePos {
+layout(std430, binding = 0) buffer ParticlePos {
     vec3 positions[];
 };
-layout(std430, shared, binding = 1) buffer ParticleColor {
+layout(std430, binding = 1) buffer ParticleColor {
     vec4 colors[];
 };
 //binding 2 is taken by particle shape
-layout(std430, shared, binding = 3) buffer ParticleVel {
+layout(std430, binding = 3) buffer ParticleVel {
     vec3 velocities[];
 };
 
@@ -42,14 +42,15 @@ vec3 bounce_on_bounds(uint id) {
 }
 
 void main() {
-    uint x = gl_GlobalInvocationID.x;
-    //uint y = gl_GlobalInvocationID.y;
-    //uint z = gl_GlobalInvocationID.z;
-    //uint id = z * gridWidth * gridHeight + y * gridWidth + x;
-
-    uint id = x;
-    if (id >= positions.length()) return; // Safety check
-    if (id >= velocities.length()) return; // Safety check
+    uint id = gl_GlobalInvocationID.x;
+    //if (id > positions.length()) return; // Safety check
+    //if (id >= velocities.length()) return; // Safety check
+    //
+    if (length(positions[id]) < 0.5) {
+        positions[id] = vec3(-2);
+        set_color(id);
+        return;
+    }
 
     velocities[id] = bounce_on_bounds(id);
     positions[id] = move_particle(positions[id], velocities[id]);
