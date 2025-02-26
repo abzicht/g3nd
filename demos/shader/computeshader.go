@@ -79,7 +79,7 @@ func (t *ComputeDemo) Start(a *app.App) {
 	callback := func(b_ *gls.BufferRaw, deltaTime time.Duration) {
 		b := b_.Typed()
 		for i := 0; i < vec3length; i++ {
-			v, err := b.GetVec3(0)
+			v, err := gls.Get[math32.Vector3](b, 0)
 			if err != nil {
 				panic(err)
 			}

@@ -43,14 +43,8 @@ vec3 bounce_on_bounds(uint id) {
 
 void main() {
     uint id = gl_GlobalInvocationID.x;
-    //if (id > positions.length()) return; // Safety check
-    //if (id >= velocities.length()) return; // Safety check
-    //
-    if (length(positions[id]) < 0.5) {
-        positions[id] = vec3(-2);
-        set_color(id);
-        return;
-    }
+    if (id > positions.length()) return; // Safety check
+    if (id > velocities.length()) return; // Safety check
 
     velocities[id] = bounce_on_bounds(id);
     positions[id] = move_particle(positions[id], velocities[id]);

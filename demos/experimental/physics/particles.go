@@ -5,7 +5,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"time"
-	"unsafe"
 
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
@@ -74,24 +73,24 @@ func (t *ParticleDemo) Start(a *app.App) {
 		t.workGroups.Y = 1
 		t.workGroups.Z = 1
 	}
-	var particles []math32.Vector3
+	var positions []math32.Vector3
 	for i := uint32(0); i < t.numParticles; i++ {
 		randVec := math32.NewVector3(rand.Float32(), rand.Float32(), rand.Float32())
 		randVec.MultiplyScalar(0.05).AddScalar(0.5)
-		var particle math32.Vector3
-		particle.Add(t.boundsMax)
-		particle.Sub(t.boundsMin)
-		particle.Multiply(randVec)
-		particle.Add(t.boundsMin)
-		particles = append(particles, particle)
+		//randVec := math32.NewVector4(0, 0, 0, 0).AddScalar(0.2)
+		var position math32.Vector3
+		position.Add(t.boundsMax)
+		position.Sub(t.boundsMin)
+		position.Multiply(randVec)
+		position.Add(t.boundsMin)
+		positions = append(positions, position)
 	}
-	bufferSize := t.numParticles * uint32(gls.SizeofT[math32.Vector3]())
+	positionsBuffer := gls.AsBuffer[math32.Vector3](positions)
 	positionsBO := gls.NewSSBO(gs, geometry.ParticlePositionBinding,
-		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, bufferSize).SetInitialBuffer(gls.NewBufferRaw(
-		unsafe.Pointer(unsafe.SliceData(particles)), bufferSize))
+		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, positionsBuffer.Size).SetInitialBuffer(&positionsBuffer.BufferRaw)
 	ssbos.Set(positionsBO)
 	colorBO := gls.NewSSBO(gs, material.ParticleColorBinding, gls.BO_DYNAMIC_COPY,
-		gls.BO_READ_WRITE, nil, t.numParticles*uint32(gls.SizeofT[math32.Vector4]()))
+		gls.BO_READ_WRITE, nil, t.numParticles*uint32(gls.StrideofT[math32.Vector4]()))
 	ssbos.Set(colorBO)
 	{
 		var velocities []math32.Vector3
@@ -101,10 +100,9 @@ func (t *ParticleDemo) Start(a *app.App) {
 			velocity.MultiplyScalar(0.01)
 			velocities = append(velocities, *velocity)
 		}
-		bufferSize = t.numParticles * uint32(gls.SizeofT[math32.Vector3]())
+		velocitiesBuffer := gls.AsBuffer[math32.Vector3](velocities)
 		ssbos.Set(gls.NewSSBO(gs, 3,
-			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, bufferSize).SetInitialBuffer(gls.NewBufferRaw(
-			unsafe.Pointer(unsafe.SliceData(velocities)), bufferSize)))
+			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, velocitiesBuffer.Size).SetInitialBuffer(&velocitiesBuffer.BufferRaw))
 	}
 	{
 		t.computeSpecs = gls.NewComputeSpecs("ParticleDemoProg", "4_3", *gls.NewShaderDefines(), ssbos)
