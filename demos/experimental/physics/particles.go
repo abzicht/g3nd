@@ -102,8 +102,8 @@ func (t *ParticleDemo) Start(a *app.App) {
 		}
 	}
 
-	t.particleMat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8}, colorBO)
-	t.particleMat.SetParticleSize(3) // Set to -1 in conjunction with setting no shape to get true pixel particles instead of quads or geometries
+	t.particleMat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8}, colorBO) // replace colorBO with nil to use a standard material with the given color
+	t.particleMat.SetParticleSize(3)                                                                     // Set to -1 in conjunction with setting no shape to get true pixel particles instead of quads or geometries
 
 	// Create geometry that takes its data from the created buffer
 	t.particleGeometry = geometry.NewParticles(t.numParticles, positionsBO, t.boundsMax.Sub(t.boundsMin))
