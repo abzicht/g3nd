@@ -1,5 +1,6 @@
 precision highp float;
 
+// Buffers shared with a compute shader
 layout(std430, shared, binding = 0) buffer DataBuffer1 {
     vec3 data[]; 
 };
@@ -44,7 +45,7 @@ vec3 hsv2rgb(vec3 c)
 }
 
 void main() {
-    // Combine material with brick pattern colors
+    // Combine material with buffer from a compute shader
     vec2 index = VPosition;
     vec3 color = mix(Color, vec3(0), float(i%256)/255);
     color = mix(Color, hsv2rgb(vec3(0,1,1)), index.x * index.y);

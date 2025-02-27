@@ -20,7 +20,7 @@ func init() {
 		computeShaderFile: "shaders/particle_compute.glsl",
 		boundsMin:         math32.NewVector3(0, 0, 0),
 		boundsMax:         math32.NewVector3(2, 2, 2),
-		numParticles:      1e5,
+		numParticles:      1e4,
 	}
 }
 
@@ -45,11 +45,6 @@ type ParticleDemo struct {
 	boundsMax         *math32.Vector3
 }
 
-type Particle struct {
-	pos      math32.Vector3
-	velocity math32.Vector2 //rotation
-}
-
 // Start is called once at the start of the demo.
 func (t *ParticleDemo) Start(a *app.App) {
 	gs := a.Renderer().Coman().GLS()
@@ -58,26 +53,20 @@ func (t *ParticleDemo) Start(a *app.App) {
 	dir1.SetPosition(0, 30, 100)
 	a.Scene().Add(dir1)
 
-	//// Add axes helper
-	//axes := helper.NewAxes(1)
-	//a.Scene().Add(axes)
-
 	a.Renderer().Coman().AddShader("particle_compute_demo", loadFile(a.DirData()+"/"+t.computeShaderFile))
-	//a.Renderer().Coman().AddChunk("", loadFile(a.DirData()+"/"+t.computeShaderFile))
 	a.Renderer().Coman().AddProgram("ParticleDemoProg", "particle_compute_demo")
 	ssbos := gls.NewBufferObjects()
 	{
-		localSize := uint32(512) // Workgroup size (8x8x8)
+		localSize := uint32(512) // NumWorkGroups: (512x1x1)
 		t.workGroups = new(gls.NumWorkGroups)
 		t.workGroups.X = uint32(t.numParticles+localSize-1) / localSize
 		t.workGroups.Y = 1
 		t.workGroups.Z = 1
 	}
-	var positions []math32.Vector3
+	var positions []math32.Vector3 // initial particle positions
 	for i := uint32(0); i < t.numParticles; i++ {
 		randVec := math32.NewVector3(rand.Float32(), rand.Float32(), rand.Float32())
 		randVec.MultiplyScalar(0.05).AddScalar(0.5)
-		//randVec := math32.NewVector4(0, 0, 0, 0).AddScalar(0.2)
 		var position math32.Vector3
 		position.Add(t.boundsMax)
 		position.Sub(t.boundsMin)
@@ -85,7 +74,7 @@ func (t *ParticleDemo) Start(a *app.App) {
 		position.Add(t.boundsMin)
 		positions = append(positions, position)
 	}
-	positionsBuffer := gls.AsBuffer[math32.Vector3](positions)
+	positionsBuffer := gls.SliceAsBuffer[math32.Vector3](positions)
 	positionsBO := gls.NewSSBO(gs, geometry.ParticlePositionBinding,
 		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, positionsBuffer.Size).SetInitialBuffer(&positionsBuffer.BufferRaw)
 	ssbos.Set(positionsBO)
@@ -100,7 +89,7 @@ func (t *ParticleDemo) Start(a *app.App) {
 			velocity.MultiplyScalar(0.01)
 			velocities = append(velocities, *velocity)
 		}
-		velocitiesBuffer := gls.AsBuffer[math32.Vector3](velocities)
+		velocitiesBuffer := gls.SliceAsBuffer[math32.Vector3](velocities)
 		ssbos.Set(gls.NewSSBO(gs, 3,
 			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, velocitiesBuffer.Size).SetInitialBuffer(&velocitiesBuffer.BufferRaw))
 	}
@@ -113,26 +102,16 @@ func (t *ParticleDemo) Start(a *app.App) {
 		}
 	}
 
-	t.particleMat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8}, nil)
-	t.particleMat.SetParticleSize(30)
+	t.particleMat = material.NewParticleMaterial(math32.Color4{R: 0.2, G: 0.4, B: 0.6, A: 0.8}, colorBO)
+	t.particleMat.SetParticleSize(3) // Set to -1 in conjunction with setting no shape to get true pixel particles instead of quads or geometries
 
 	// Create geometry that takes its data from the created buffer
 	t.particleGeometry = geometry.NewParticles(t.numParticles, positionsBO, t.boundsMax.Sub(t.boundsMin))
-	//t.particleGeometry.SetParticleShape(geometry.NewCone(0.04, 0.09, 3, 3, true))
-	t.particleGeometry.SetParticleShape(geometry.NewSphere(0.01, 8, 8))
+	t.particleGeometry.SetParticleShape(geometry.NewSphere(0.01, 8, 8)) // Leave out to deal with pixels only
 
 	t.particleGraphics = graphic.NewParticleSim(t.particleGeometry, t.particleMat)
 	t.particleGraphics.SetPosition(t.boundsMin.X, t.boundsMin.Y, t.boundsMin.Z)
 	a.Scene().Add(t.particleGraphics)
-	if false {
-		geom2 := geometry.NewSphere(.5, 32, 16)
-		mat2 := material.NewStandard(&math32.Color{R: 1, G: 1, B: 1})
-		mat2.SetWireframe(false)
-		mat2.SetSide(material.SideDouble)
-		sphere2 := graphic.NewMesh(geom2, mat2)
-		sphere2.SetPosition(2.5, 1, 2)
-		a.Scene().Add(sphere2)
-	}
 
 	var uniBoundsMin gls.Uniform
 	uniBoundsMin.Init("BoundsMin")
@@ -145,11 +124,14 @@ func (t *ParticleDemo) Start(a *app.App) {
 // Update is called every frame.
 func (t *ParticleDemo) Update(a *app.App, deltaTime time.Duration) {
 	// called just before the call to render
+	// Switch to our custom program
 	a.Renderer().Coman().SetProgram(t.computeSpecs)
+	// Dispatch the compute shader
 	a.Renderer().Coman().Compute(*t.workGroups, deltaTime)
 }
 
 // Cleanup is called once at the end of the demo.
 func (t *ParticleDemo) Cleanup(a *app.App) {
+	// Be careful with deleting all programs, we can also just keep them
 	//a.Renderer().Coman().DeletePrograms()
 }

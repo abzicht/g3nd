@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"time"
-	"unsafe"
 
 	"github.com/g3n/engine/geometry"
 	"github.com/g3n/engine/gls"
@@ -41,17 +40,13 @@ type ComputeDemo struct {
 	shaderSpecs  renderer.ShaderSpecs
 }
 
+// This struct reflects an SSBO in the compute shader.
 type DataBuffer3 struct {
 	loc   math32.Vector3
 	i     uint32
 	speed float32
-	_     [2]int32
+	_     [2]int32 // Using such offset, we can account for OpenGL padding if there is any
 	data  [5]math64.Vector4
-}
-
-func (d *DataBuffer3) ToString() string {
-	//return fmt.Sprintf("i %d, loc %p, speed %f, data %s", d.i, d.loc, d.speed, d.data)
-	return fmt.Sprintf("%+v", *d)
 }
 
 // Start is called once at the start of the demo.
@@ -74,23 +69,33 @@ func (t *ComputeDemo) Start(a *app.App) {
 	a.Renderer().Coman().AddProgram("ComputeProgram", "compute-shader")
 	a.Renderer().AddProgram("FragProgram", "vertex-shader", "fragment-shader")
 
-	var vectors [30]math32.Vector3
-	vec3length := len(vectors)
+	var vectors []math32.Vector3 = make([]math32.Vector3, 30, 30)
 	callback := func(b_ *gls.BufferRaw, deltaTime time.Duration) {
-		b := b_.Typed()
-		for i := 0; i < vec3length; i++ {
-			v, err := gls.Get[math32.Vector3](b, 0)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Printf("%dth Vector: %+v\n", i, v)
-		}
+		// This callback is called everytime we DispatchCompute using Coman
+		// (assuming the program using this buffer is dispatched)
+		// The loop below demonstrates reading out an SSBO after the compute
+		// shader has worked on it.
+
+		//b := b_.Typed()
+		//for i, v := range gls.BufferAsT[math32.Vector3](b) {
+		// Commit changes to the buffer:
+		//v.AddScalar(1)
+		//gls.BufferSet[math32.Vector3](b, i, v)
+
+		//// Also consider BufferGet when not using BufferAsT
+		////gls.BufferGet[math32.Vector3](b, i)
+
+		//fmt.Printf("%dth Vector: %+v\n", i, v)
+		//}
 	}
 	bufferObjects := gls.NewBufferObjects()
 
-	ssbo := gls.NewSSBO(gs, 0,
-		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callback, uint32(unsafe.Sizeof(vectors)))
-	bufferObjects.Set(ssbo)
+	{
+		vectorsBuffer := gls.SliceAsBuffer[math32.Vector3](vectors)
+		ssbo := gls.NewSSBO(gs, 0,
+			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callback, vectorsBuffer.Size).SetInitialBuffer(&vectorsBuffer.BufferRaw)
+		bufferObjects.Set(ssbo)
+	}
 
 	t.computeSpecs = gls.NewComputeSpecs("ComputeProgram", "4_3", *gls.NewShaderDefines(), bufferObjects)
 	_, err := a.Renderer().Coman().SetProgram(t.computeSpecs)
@@ -144,7 +149,11 @@ func (m *ComputeMaterial) RenderSetup(gl *gls.GLS) {
 // Update is called every frame.
 func (t *ComputeDemo) Update(a *app.App, deltaTime time.Duration) {
 	t.plane1.RotateY(-0.005)
+	// Make sure to set the desired program
 	a.Renderer().Coman().SetProgram(t.computeSpecs)
+	// Call it once, call it twice - the number of times to repeat the compute
+	// shader between frame renderings is up to the user. - It could also be
+	// done outside of the update loop!
 	a.Renderer().Coman().Compute(*t.workGroups, deltaTime)
 }
 

@@ -1,8 +1,6 @@
 #pragma optimize(off)
 #pragma debug(on)
 
-//#include boundary_check
-
 layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
 layout(std430, binding = 0) buffer ParticlePos {
@@ -49,5 +47,4 @@ void main() {
     velocities[id] = bounce_on_bounds(id);
     positions[id] = move_particle(positions[id], velocities[id]);
     set_color(id);
-    //positions[index_].xyz = vec3(1);
 }
