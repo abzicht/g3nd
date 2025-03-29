@@ -75,10 +75,10 @@ func (t *ParticleDemo) Start(a *app.App) {
 		positions = append(positions, position)
 	}
 	positionsBuffer := gls.SliceAsBuffer[math32.Vector3](positions)
-	positionsBO := gls.NewSSBO(gs, geometry.ParticlePositionBinding,
+	positionsBO := gls.NewSSBO(gs, "ParticlePos",
 		gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, positionsBuffer.Size).SetInitialBuffer(&positionsBuffer.BufferRaw)
 	ssbos.Set(positionsBO)
-	colorBO := gls.NewSSBO(gs, material.ParticleColorBinding, gls.BO_DYNAMIC_COPY,
+	colorBO := gls.NewSSBO(gs, "ParticleColor", gls.BO_DYNAMIC_COPY,
 		gls.BO_READ_WRITE, nil, t.numParticles*uint32(gls.StrideofT[math32.Vector4]()))
 	ssbos.Set(colorBO)
 	{
@@ -90,7 +90,7 @@ func (t *ParticleDemo) Start(a *app.App) {
 			velocities = append(velocities, *velocity)
 		}
 		velocitiesBuffer := gls.SliceAsBuffer[math32.Vector3](velocities)
-		ssbos.Set(gls.NewSSBO(gs, 3,
+		ssbos.Set(gls.NewSSBO(gs, "ParticleVel",
 			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, nil, velocitiesBuffer.Size).SetInitialBuffer(&velocitiesBuffer.BufferRaw))
 	}
 	{
@@ -119,6 +119,7 @@ func (t *ParticleDemo) Start(a *app.App) {
 	var uniBoundsMax gls.Uniform
 	uniBoundsMax.Init("BoundsMax")
 	gs.Uniform3fv(uniBoundsMax.Location(gs), 1, &t.boundsMax.X)
+
 }
 
 // Update is called every frame.
