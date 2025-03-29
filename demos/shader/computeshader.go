@@ -92,7 +92,7 @@ func (t *ComputeDemo) Start(a *app.App) {
 
 	{
 		vectorsBuffer := gls.SliceAsBuffer[math32.Vector3](vectors)
-		ssbo := gls.NewSSBO(gs, "DataBuffer1",
+		ssbo := gls.NewSSBO(gs, 0,
 			gls.BO_DYNAMIC_COPY, gls.BO_READ_WRITE, callback, vectorsBuffer.Size).SetInitialBuffer(&vectorsBuffer.BufferRaw)
 		bufferObjects.Set(ssbo)
 	}
