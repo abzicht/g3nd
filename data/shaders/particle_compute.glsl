@@ -1,5 +1,7 @@
 #pragma optimize(off)
 #pragma debug(on)
+#pragma kernel curved
+#pragma kernel straight
 
 layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
@@ -39,12 +41,23 @@ vec3 bounce_on_bounds(uint id) {
     return velocity;
 }
 
-void main() {
+void straight() {
     uint id = gl_GlobalInvocationID.x;
     if (id > positions.length()) return; // Safety check
     if (id > velocities.length()) return; // Safety check
 
     velocities[id] = bounce_on_bounds(id);
+    positions[id] = move_particle(positions[id], velocities[id]);
+    set_color(id);
+}
+
+void curved() {
+    uint id = gl_GlobalInvocationID.x;
+    if (id > positions.length()) return; // Safety check
+    if (id > velocities.length()) return; // Safety check
+
+    velocities[id] = bounce_on_bounds(id);
+    velocities[id].y -= 0.001;
     positions[id] = move_particle(positions[id], velocities[id]);
     set_color(id);
 }

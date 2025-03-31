@@ -95,6 +95,7 @@ func (t *ParticleDemo) Start(a *app.App) {
 	}
 	{
 		t.computeSpecs = gls.NewComputeSpecs("ParticleDemoProg", "4_3", *gls.NewShaderDefines(), ssbos)
+		t.computeSpecs.SetKernel("curved")
 		_, err := a.Renderer().Coman().SetProgram(t.computeSpecs)
 		if err != nil {
 			fmt.Printf("Failed to set the shader program: %s\n", err)
